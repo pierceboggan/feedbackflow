@@ -4,6 +4,7 @@ using FeedbackWebApp.Services.Authentication;
 using FeedbackWebApp.Services.ContentFeed;
 using FeedbackWebApp.Services.Feedback;
 using FeedbackWebApp.Services.Interfaces;
+using FeedbackWebApp.Services.Slack;
 using Microsoft.AspNetCore.Rewrite;
 using SharedDump.Services;
 using SharedDump.Services.Interfaces;
@@ -43,6 +44,10 @@ builder.Services.AddMemoryCache();
 builder.Services.AddScoped<IHistoryService, HistoryService>();
 builder.Services.AddScoped<IAnalysisSharingService, AnalysisSharingService>();
 builder.Services.AddScoped<IExportService, ExportService>();
+
+// Add Slack integration services
+builder.Services.AddHttpClient<ISlackBotService, SlackBotService>();
+builder.Services.AddScoped<ISlackConfigurationService, SlackConfigurationService>();
 
 var app = builder.Build();
 

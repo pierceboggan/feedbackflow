@@ -1,6 +1,7 @@
 @page "/settings"
 @using SharedDump.Utils
 @using System.Threading
+@using FeedbackWebApp.Components.Slack
 @inject UserSettingsService UserSettings
 @inject IJSRuntime JSRuntime
 @inject ISpeechSynthesisService SpeechSynthesisService
@@ -142,6 +143,12 @@
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-12 mb-4">
+                <SlackSettings />
             </div>
         </div>
 

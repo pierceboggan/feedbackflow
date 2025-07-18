@@ -1,0 +1,16 @@
+{
+  "Slack": {
+    "BotToken": "xoxb-your-slack-bot-token-here",
+    "VerificationToken": "your-verification-token-here",
+    "SigningSecret": "your-signing-secret-here",
+    "DefaultChannelId": "C1234567890",
+    "EnableNotifications": true,
+    "EnableWeeklyReports": true,
+    "NotificationChannels": "C1234567890,C0987654321",
+    "ReportChannels": "C1234567890"
+  },
+  "FeedbackFlow": {
+    "ApiBase": "https://your-feedbackflow-functions.azurewebsites.net/api",
+    "ApiKey": "your-function-key-here"
+  }
+}

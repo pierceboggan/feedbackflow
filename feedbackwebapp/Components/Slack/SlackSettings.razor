@@ -1,0 +1,413 @@
+@using FeedbackWebApp.Services.Slack
+@inject ISlackConfigurationService SlackConfigService
+@inject IToastService ToastService
+@inject ILogger<SlackSettings> Logger
+
+<div class="card shadow-sm">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="card-title mb-0">
+            <i class="bi bi-slack me-2"></i>Slack Integration
+        </h5>
+        @if (slackConfig != null && isSlackConfigured)
+        {
+            <span class="badge bg-success">
+                <i class="bi bi-check-circle-fill me-1"></i>Connected
+            </span>
+        }
+        else
+        {
+            <span class="badge bg-warning">
+                <i class="bi bi-exclamation-triangle-fill me-1"></i>Not Configured
+            </span>
+        }
+    </div>
+    
+    <div class="card-body">
+        @if (slackConfig == null)
+        {
+            <div class="text-center py-3">
+                <div class="spinner-border spinner-border-sm" role="status">
+                    <span class="visually-hidden">Loading Slack settings...</span>
+                </div>
+                <span class="ms-2">Loading Slack configuration...</span>
+            </div>
+        }
+        else
+        {
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="form-floating mb-3">
+                        <input type="password" class="form-control @(string.IsNullOrEmpty(slackConfig.BotToken) ? "is-invalid" : "")" 
+                               id="botToken" @bind="slackConfig.BotToken" @bind:event="oninput" />
+                        <label for="botToken">Bot Token</label>
+                        <div class="form-text">
+                            Your Slack bot's OAuth token (starts with xoxb-)
+                        </div>
+                    </div>
+
+                    <div class="form-floating mb-3">
+                        <input type="password" class="form-control" 
+                               id="verificationToken" @bind="slackConfig.VerificationToken" @bind:event="oninput" />
+                        <label for="verificationToken">Verification Token</label>
+                        <div class="form-text">
+                            Used to verify requests from Slack
+                        </div>
+                    </div>
+
+                    <div class="form-floating mb-3">
+                        <input type="password" class="form-control" 
+                               id="signingSecret" @bind="slackConfig.SigningSecret" @bind:event="oninput" />
+                        <label for="signingSecret">Signing Secret</label>
+                        <div class="form-text">
+                            Used to verify request signatures
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6">
+                    <div class="form-floating mb-3">
+                        <select class="form-select" id="defaultChannel" @bind="slackConfig.DefaultChannelId" @bind:event="onchange">
+                            <option value="">Select a channel...</option>
+                            @if (availableChannels != null)
+                            {
+                                @foreach (var channel in availableChannels)
+                                {
+                                    <option value="@channel.Id">#@channel.Name</option>
+                                }
+                            }
+                        </select>
+                        <label for="defaultChannel">Default Channel</label>
+                        <div class="form-text">
+                            Default channel for notifications
+                        </div>
+                    </div>
+
+                    <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" type="checkbox" role="switch" 
+                               id="enableNotifications" @bind="slackConfig.EnableNotifications" @bind:event="onchange">
+                        <label class="form-check-label" for="enableNotifications">
+                            Enable Notifications
+                        </label>
+                        <div class="form-text">
+                            Send notifications for completed analyses
+                        </div>
+                    </div>
+
+                    <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" type="checkbox" role="switch" 
+                               id="enableWeeklyReports" @bind="slackConfig.EnableWeeklyReports" @bind:event="onchange">
+                        <label class="form-check-label" for="enableWeeklyReports">
+                            Enable Weekly Reports
+                        </label>
+                        <div class="form-text">
+                            Send weekly summary reports
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            @if (slackConfig.EnableNotifications || slackConfig.EnableWeeklyReports)
+            {
+                <div class="border-top pt-3 mt-3">
+                    <h6>Channel Configuration</h6>
+                    
+                    @if (slackConfig.EnableNotifications)
+                    {
+                        <div class="mb-3">
+                            <label class="form-label">Notification Channels</label>
+                            <div class="input-group">
+                                <select class="form-select" @bind="selectedNotificationChannel">
+                                    <option value="">Select a channel to add...</option>
+                                    @if (availableChannels != null)
+                                    {
+                                        @foreach (var channel in availableChannels.Where(c => !slackConfig.NotificationChannels.Contains(c.Id)))
+                                        {
+                                            <option value="@channel.Id">#@channel.Name</option>
+                                        }
+                                    }
+                                </select>
+                                <button class="btn btn-outline-primary" type="button" @onclick="AddNotificationChannel" 
+                                        disabled="@string.IsNullOrEmpty(selectedNotificationChannel)">
+                                    Add
+                                </button>
+                            </div>
+                            <div class="mt-2">
+                                @foreach (var channelId in slackConfig.NotificationChannels)
+                                {
+                                    var channelName = availableChannels?.FirstOrDefault(c => c.Id == channelId)?.Name ?? channelId;
+                                    <span class="badge bg-secondary me-2 mb-1">
+                                        #@channelName
+                                        <button type="button" class="btn-close btn-close-white ms-2" aria-label="Remove" 
+                                                @onclick="() => RemoveNotificationChannel(channelId)"></button>
+                                    </span>
+                                }
+                            </div>
+                        </div>
+                    }
+
+                    @if (slackConfig.EnableWeeklyReports)
+                    {
+                        <div class="mb-3">
+                            <label class="form-label">Weekly Report Channels</label>
+                            <div class="input-group">
+                                <select class="form-select" @bind="selectedReportChannel">
+                                    <option value="">Select a channel to add...</option>
+                                    @if (availableChannels != null)
+                                    {
+                                        @foreach (var channel in availableChannels.Where(c => !slackConfig.ReportChannels.Contains(c.Id)))
+                                        {
+                                            <option value="@channel.Id">#@channel.Name</option>
+                                        }
+                                    }
+                                </select>
+                                <button class="btn btn-outline-primary" type="button" @onclick="AddReportChannel" 
+                                        disabled="@string.IsNullOrEmpty(selectedReportChannel)">
+                                    Add
+                                </button>
+                            </div>
+                            <div class="mt-2">
+                                @foreach (var channelId in slackConfig.ReportChannels)
+                                {
+                                    var channelName = availableChannels?.FirstOrDefault(c => c.Id == channelId)?.Name ?? channelId;
+                                    <span class="badge bg-info me-2 mb-1">
+                                        #@channelName
+                                        <button type="button" class="btn-close btn-close-white ms-2" aria-label="Remove" 
+                                                @onclick="() => RemoveReportChannel(channelId)"></button>
+                                    </span>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+
+            <div class="border-top pt-3 mt-3">
+                <div class="d-flex gap-2">
+                    <button class="btn btn-outline-secondary" @onclick="TestConnection" disabled="@(isTestingConnection || string.IsNullOrEmpty(slackConfig.BotToken))">
+                        @if (isTestingConnection)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-wifi me-2"></i>
+                        }
+                        Test Connection
+                    </button>
+
+                    <button class="btn btn-outline-info" @onclick="RefreshChannels" disabled="@(isRefreshingChannels || string.IsNullOrEmpty(slackConfig.BotToken))">
+                        @if (isRefreshingChannels)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-arrow-clockwise me-2"></i>
+                        }
+                        Refresh Channels
+                    </button>
+
+                    <button class="btn btn-primary" @onclick="SaveConfiguration" disabled="@(isSaving || string.IsNullOrEmpty(slackConfig.BotToken))">
+                        @if (isSaving)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-check-lg me-2"></i>
+                        }
+                        Save Configuration
+                    </button>
+                </div>
+            </div>
+
+            @if (!string.IsNullOrEmpty(slackConfig.BotToken))
+            {
+                <div class="alert alert-info mt-3">
+                    <h6 class="alert-heading">
+                        <i class="bi bi-info-circle me-2"></i>Available Slash Commands
+                    </h6>
+                    <ul class="mb-0">
+                        <li><code>/feedbackflow &lt;url&gt;</code> - Analyze feedback from any supported platform</li>
+                        <li><code>/ff-github &lt;github-url&gt;</code> - Analyze GitHub issues or pull requests</li>
+                        <li><code>/ff-youtube &lt;video-url&gt;</code> - Analyze YouTube video comments</li>
+                        <li><code>/ff-reddit &lt;thread-url&gt;</code> - Analyze Reddit thread comments</li>
+                    </ul>
+                </div>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    private SlackConfiguration? slackConfig;
+    private List<SlackChannel>? availableChannels;
+    private bool isSlackConfigured;
+    private bool isSaving;
+    private bool isTestingConnection;
+    private bool isRefreshingChannels;
+    private string selectedNotificationChannel = "";
+    private string selectedReportChannel = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSlackConfiguration();
+        await CheckSlackConfigured();
+        await LoadAvailableChannels();
+    }
+
+    private async Task LoadSlackConfiguration()
+    {
+        try
+        {
+            slackConfig = await SlackConfigService.GetConfigurationAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading Slack configuration");
+            await ToastService.ShowErrorAsync("Failed to load Slack configuration");
+        }
+    }
+
+    private async Task CheckSlackConfigured()
+    {
+        try
+        {
+            isSlackConfigured = await SlackConfigService.IsSlackConfiguredAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error checking Slack configuration status");
+        }
+    }
+
+    private async Task LoadAvailableChannels()
+    {
+        try
+        {
+            if (slackConfig != null && !string.IsNullOrEmpty(slackConfig.BotToken))
+            {
+                availableChannels = await SlackConfigService.GetAvailableChannelsAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading available channels");
+        }
+    }
+
+    private async Task TestConnection()
+    {
+        if (slackConfig == null) return;
+
+        try
+        {
+            isTestingConnection = true;
+            var success = await SlackConfigService.TestSlackConnectionAsync();
+            
+            if (success)
+            {
+                await ToastService.ShowSuccessAsync("Slack connection test successful!");
+                await LoadAvailableChannels();
+            }
+            else
+            {
+                await ToastService.ShowErrorAsync("Slack connection test failed. Please check your credentials.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error testing Slack connection");
+            await ToastService.ShowErrorAsync("Error testing Slack connection");
+        }
+        finally
+        {
+            isTestingConnection = false;
+        }
+    }
+
+    private async Task RefreshChannels()
+    {
+        try
+        {
+            isRefreshingChannels = true;
+            await LoadAvailableChannels();
+            await ToastService.ShowSuccessAsync("Channels refreshed successfully!");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error refreshing channels");
+            await ToastService.ShowErrorAsync("Error refreshing channels");
+        }
+        finally
+        {
+            isRefreshingChannels = false;
+        }
+    }
+
+    private async Task SaveConfiguration()
+    {
+        if (slackConfig == null) return;
+
+        try
+        {
+            isSaving = true;
+            await SlackConfigService.SaveConfigurationAsync(slackConfig);
+            await CheckSlackConfigured();
+            await ToastService.ShowSuccessAsync("Slack configuration saved successfully!");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error saving Slack configuration");
+            await ToastService.ShowErrorAsync($"Error saving configuration: {ex.Message}");
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private void AddNotificationChannel()
+    {
+        if (!string.IsNullOrEmpty(selectedNotificationChannel) && slackConfig != null)
+        {
+            if (!slackConfig.NotificationChannels.Contains(selectedNotificationChannel))
+            {
+                slackConfig.NotificationChannels.Add(selectedNotificationChannel);
+                selectedNotificationChannel = "";
+                StateHasChanged();
+            }
+        }
+    }
+
+    private void RemoveNotificationChannel(string channelId)
+    {
+        if (slackConfig != null)
+        {
+            slackConfig.NotificationChannels.Remove(channelId);
+            StateHasChanged();
+        }
+    }
+
+    private void AddReportChannel()
+    {
+        if (!string.IsNullOrEmpty(selectedReportChannel) && slackConfig != null)
+        {
+            if (!slackConfig.ReportChannels.Contains(selectedReportChannel))
+            {
+                slackConfig.ReportChannels.Add(selectedReportChannel);
+                selectedReportChannel = "";
+                StateHasChanged();
+            }
+        }
+    }
+
+    private void RemoveReportChannel(string channelId)
+    {
+        if (slackConfig != null)
+        {
+            slackConfig.ReportChannels.Remove(channelId);
+            StateHasChanged();
+        }
+    }
+}
