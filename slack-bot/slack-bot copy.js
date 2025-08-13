@@ -126,34 +126,6 @@ platformCommands.forEach(commandName => {
   });
 });
 
-// Alias: /summarize should behave like /feedbackflow
-app.command('/summarize', async ({ command, ack, respond }) => {
-  try {
-    await ack();
-
-    const url = command.text?.trim();
-    if (!url) {
-      await respond({ response_type: 'ephemeral', text: '❌ Please provide a URL to summarize. Example: `/summarize https://github.com/user/repo/issues/123`' });
-      return;
-    }
-
-    await respond({ response_type: 'ephemeral', text: '🔄 Summarizing content...', blocks: [{ type: 'section', text: { type: 'mrkdwn', text: `🔄 Working on summarizing: \`${url}\`` } }] });
-
-    setTimeout(async () => {
-      try {
-        const result = await analyzeFeedback(url);
-        await sendAnalysisResult(command.response_url, result, url);
-      } catch (error) {
-        console.error('Error processing /summarize:', error);
-        await sendErrorResponse(command.response_url, error.message);
-      }
-    }, 1000);
-
-  } catch (error) {
-    console.error('Error handling /summarize command:', error);
-  }
-});
-
 // Handle interactive components
 app.action('share_analysis', async ({ ack, body, client }) => {
   try {
@@ -548,25 +520,7 @@ async function sendAnalysisResult(responseUrl, result, originalUrl) {
     ],
   };
 
-  try {
-    await axios.post(responseUrl, message);
-  } catch (err) {
-    console.error('Error sending analysis result:', err && err.toString ? err.toString() : err);
-
-    // If Slack rejects blocks (invalid_blocks) or other errors, fall back to a simple text response
-    const fallbackText = `📊 ${result.platform} Analysis Complete\nSource: ${originalUrl}\n\n${truncateText(result.analysis, 3000)}`;
-    try {
-      await axios.post(responseUrl, { response_type: 'in_channel', text: fallbackText });
-      return;
-    } catch (err2) {
-      console.error('Fallback send to response_url failed:', err2 && err2.toString ? err2.toString() : err2);
-      try {
-        await axios.post(responseUrl, { response_type: 'ephemeral', text: '⚠️ Failed to deliver analysis result. Please try again later.' });
-      } catch (err3) {
-        console.error('Final fallback also failed:', err3 && err3.toString ? err3.toString() : err3);
-      }
-    }
-  }
+  await axios.post(responseUrl, message);
 }
 
 async function sendErrorResponse(responseUrl, errorMessage) {
@@ -594,10 +548,8 @@ async function sendErrorResponse(responseUrl, errorMessage) {
 }
 
 function truncateText(text, maxLength = 3000) {
-  if (!text) return '';
-  const s = typeof text === 'string' ? text : JSON.stringify(text);
-  if (s.length <= maxLength) return s;
-  return s.substring(0, maxLength - 3) + '...';
+  if (text.length <= maxLength) return text;
+  return text.substring(0, maxLength - 3) + '...';
 }
 
 // Global error handler
